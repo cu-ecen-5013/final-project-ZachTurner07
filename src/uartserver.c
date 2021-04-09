@@ -77,10 +77,11 @@ int main(int argc, char const *argv[])
 
 
     char read_buffer [256];
+    memset(read_buffer, 0, sizeof(read_buffer));
 
     do 
     {
-        int bytes_read = read(serial_fid, &read_buffer, sizeof(read_buffer));
+        int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
 
         if (bytes_read < 0)
         {
@@ -88,7 +89,7 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
 
-        printf("Bytes read from serial device: %s", read_buffer);
+        printf("Bytes read from serial device: %s\n", read_buffer);
 
     } while (run_as_daemon);
     
