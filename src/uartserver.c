@@ -8,6 +8,9 @@
 #include <termios.h> // Contains POSIX terminal control definitions
 #include <unistd.h> // write(), read(), close()
 
+#ifndef ARDUINO_SERIAL_DEVICE
+#define ARDUINO_SERIAL_DEVICE "/dev/ttyACM0"
+#endif
 
 // Resource
 // https://blog.mbedded.ninja/programming/operating-systems/linux/linux-serial-ports-using-c-cpp/#baud-rate
@@ -30,7 +33,7 @@ int main(int argc, char const *argv[])
 
     printf("Hello, world!\n");
 
-    int serial_fid = open("/dev/ttyUSB0", O_RDWR);
+    int serial_fid = open(ARDUINO_SERIAL_DEVICE, O_RDWR);
 
     if (serial_fid < 0)
     {
