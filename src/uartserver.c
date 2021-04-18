@@ -5,12 +5,90 @@
 
 #include <fcntl.h> // Contains file controls like O_RDWR
 #include <errno.h> // Error integer and strerror() function
+#include <syslog.h>
 #include <termios.h> // Contains POSIX terminal control definitions
 #include <unistd.h> // write(), read(), close()
 
 #ifndef ARDUINO_SERIAL_DEVICE
 #define ARDUINO_SERIAL_DEVICE "/dev/ttyACM0"
 #endif
+
+#define LOGFILE "/var/log/syslog"
+
+
+//! The file descriptor of the arduino serial device
+static int serial_fid;
+
+void isConnected()
+{
+    syslog(LOG_DEBUG, "Attempting to connect to the Arduino");
+
+    // check to if Arduino is connected
+    const char is_alive_command[10] = "connected";
+
+    int bytes_written = write(serial_fid, is_alive_command, sizeof(is_alive_command));
+
+    syslog(LOG_DEBUG, "Bytes written was %d", bytes_written);
+
+    if (bytes_written < (int) sizeof(is_alive_command))
+    {
+        perror("writing isalive command");
+        exit(EXIT_FAILURE);
+    }
+
+    // listen for response
+    char read_buffer [256];
+    size_t read_pos = 0;
+
+    memset(read_buffer, 0, sizeof(read_buffer));
+
+    bool full_packet_recieved = false;
+    
+    do {
+        int bytes_read = read(serial_fid, (read_buffer + read_pos), sizeof(read_buffer));
+
+        if (bytes_read < 0)
+        {
+            perror("Error receiving from socket.");
+            exit(EXIT_FAILURE);
+        }
+
+        // check if we got a full packet, should be non-null
+        char* null_char = strchr(read_buffer, '\n');
+
+        if (null_char == NULL)
+        {
+            read_pos += bytes_read;
+        }
+        else
+        {
+            // full packet was received in the buffer since a \n was found
+            full_packet_recieved = true;
+        }
+
+    } while (!full_packet_recieved);
+
+    syslog(LOG_DEBUG, "Read whole word %s\n",read_buffer);
+
+    // int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
+
+    // syslog(LOG_DEBUG, "Number of bytes read was %d",bytes_read);
+    syslog(LOG_DEBUG, "Bytes read was %s\n", read_buffer);
+
+    // if (bytes_read < 0)
+    // {
+    //     perror("reading from serial port");
+    //     exit(EXIT_FAILURE);
+    // }
+
+    if (strcmp(read_buffer, "acknowledge") != 0)
+    {
+        syslog(LOG_ERR, "ARDUINO WAS NOT DETECTED");
+        exit(EXIT_FAILURE);
+    }
+
+    syslog(LOG_DEBUG, "Arduino connected");
+}
 
 // Resource
 // https://blog.mbedded.ninja/programming/operating-systems/linux/linux-serial-ports-using-c-cpp/#baud-rate
@@ -31,9 +109,14 @@ int main(int argc, char const *argv[])
         }
     }
 
-    printf("Hello, world!\n");
+    // open the log
+    openlog(LOGFILE, 0, LOG_USER);
 
-    int serial_fid = open(ARDUINO_SERIAL_DEVICE, O_RDWR);
+    syslog(LOG_DEBUG, "Log opened for UART server");
+
+    serial_fid = open(ARDUINO_SERIAL_DEVICE, O_RDWR);
+
+    syslog(LOG_DEBUG, "serial device fid is %d", serial_fid);
 
     if (serial_fid < 0)
     {
@@ -75,23 +158,38 @@ int main(int argc, char const *argv[])
         daemon(0, 0);
     }
 
+    isConnected();
 
+    // listen for response
     char read_buffer [256];
     memset(read_buffer, 0, sizeof(read_buffer));
 
-    do 
+    // check to if Arduino is connected
+    const char start_processing[11] = "continuous";
+
+    int bytes_written = write(serial_fid, start_processing, sizeof(start_processing));
+
+    syslog(LOG_DEBUG, "Bytes written was %d", bytes_written);
+
+    if (bytes_written < (int) sizeof(start_processing))
     {
-        int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
+        perror("writing isalive command");
+        exit(EXIT_FAILURE);
+    }
 
-        if (bytes_read < 0)
-        {
-            perror("reading from serial port");
-            exit(EXIT_FAILURE);
-        }
+    // do 
+    // {
+    //     int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
 
-        printf("Bytes read from serial device: %s\n", read_buffer);
+    //     if (bytes_read < 0)
+    //     {
+    //         perror("reading from serial port");
+    //         exit(EXIT_FAILURE);
+    //     }
 
-    } while (run_as_daemon);
+    //     printf("Bytes read from serial device: %s\n", read_buffer);
+
+    // } while (run_as_daemon);
     
     return 0;
 }
