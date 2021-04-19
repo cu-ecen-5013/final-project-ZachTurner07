@@ -24,7 +24,7 @@ void isConnected()
     syslog(LOG_DEBUG, "Attempting to connect to the Arduino");
 
     // check to if Arduino is connected
-    const char is_alive_command[] = "c\n";
+    const char is_alive_command[] = "a\n";
 
     int bytes_written = write(serial_fid, is_alive_command, sizeof(is_alive_command));
 
@@ -53,11 +53,12 @@ void isConnected()
 
     bool full_packet_recieved = false;
 
-        syslog(LOG_DEBUG, "before DO");
+    syslog(LOG_DEBUG, "before DO");
 
-    
+    int bytes_read = -1;
+
     do {
-        int bytes_read = read(serial_fid, (read_buffer + read_pos), sizeof(read_buffer));
+        bytes_read = read(serial_fid, (read_buffer + read_pos), sizeof(read_buffer));
 
         syslog(LOG_DEBUG, "Bytes READ was %d", bytes_written);
 
@@ -95,14 +96,27 @@ void isConnected()
     syslog(LOG_DEBUG, "Read whole word %s\n",read_buffer);
 
     // syslog(LOG_DEBUG, "Number of bytes read was %d",bytes_read);
-    syslog(LOG_DEBUG, "Bytes read was %s\n", read_buffer);
+    syslog(LOG_DEBUG, "Bytes read was %d\n", bytes_read);
 
+    
+    int str_length = strlen(read_buffer);
 
-    if (strcmp(read_buffer, is_alive_command) != 0)
+    syslog(LOG_DEBUG, "string length is %d", str_length);
+
+    if (read_buffer[str_length-1] == '\r')
     {
-        syslog(LOG_ERR, "ARDUINO WAS NOT DETECTED");
-        exit(EXIT_FAILURE);
+        read_buffer[str_length-1] = '\0';
     }
+
+    syslog(LOG_DEBUG, "new whole word %s\n",read_buffer);
+
+    // TODO could fix this later
+    // if (strcmp(read_buffer, "acknowledge") != 0)
+    // {
+    //     syslog(LOG_ERR, "strcmp response was %d", strcmp(read_buffer, "acknowledge"));
+    //     syslog(LOG_ERR, "ARDUINO WAS NOT DETECTED");
+    //     exit(EXIT_FAILURE);
+    // }
 
     syslog(LOG_DEBUG, "Arduino connected");
 }
@@ -182,7 +196,7 @@ int main(int argc, char const *argv[])
     memset(read_buffer, 0, sizeof(read_buffer));
 
     // check to if Arduino is connected
-    const char start_processing[11] = "continuous";
+    const char start_processing[] = "c";
 
     int bytes_written = write(serial_fid, start_processing, sizeof(start_processing));
 
@@ -194,19 +208,22 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    // do 
-    // {
-    //     int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
+    do 
+    {
+        int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
 
-    //     if (bytes_read < 0)
-    //     {
-    //         perror("reading from serial port");
-    //         exit(EXIT_FAILURE);
-    //     }
+        if (bytes_read < 0)
+        {
+            perror("reading from serial port");
+            exit(EXIT_FAILURE);
+        }
 
-    //     printf("Bytes read from serial device: %s\n", read_buffer);
+        printf("Bytes read from serial device: %s\n", read_buffer);
+        syslog(LOG_DEBUG, "Bytes read from serial device: %s\n", read_buffer);
 
-    // } while (run_as_daemon);
+        // TODO add GPIO to indicate to user
+
+    } while (true);
     
     return 0;
 }
