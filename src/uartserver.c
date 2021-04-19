@@ -24,15 +24,24 @@ void isConnected()
     syslog(LOG_DEBUG, "Attempting to connect to the Arduino");
 
     // check to if Arduino is connected
-    const char is_alive_command[10] = "connected";
+    const char is_alive_command[] = "c\n";
 
     int bytes_written = write(serial_fid, is_alive_command, sizeof(is_alive_command));
 
     syslog(LOG_DEBUG, "Bytes written was %d", bytes_written);
+    syslog(LOG_DEBUG, "sizeof command was %ld", sizeof(is_alive_command));
 
     if (bytes_written < (int) sizeof(is_alive_command))
     {
         perror("writing isalive command");
+        exit(EXIT_FAILURE);
+    }
+
+    int err = tcdrain(serial_fid);
+
+    if (err < 0)
+    {
+        perror("tcdrain error");
         exit(EXIT_FAILURE);
     }
 
@@ -43,45 +52,53 @@ void isConnected()
     memset(read_buffer, 0, sizeof(read_buffer));
 
     bool full_packet_recieved = false;
+
+        syslog(LOG_DEBUG, "before DO");
+
     
     do {
         int bytes_read = read(serial_fid, (read_buffer + read_pos), sizeof(read_buffer));
 
+        syslog(LOG_DEBUG, "Bytes READ was %d", bytes_written);
+
         if (bytes_read < 0)
         {
-            perror("Error receiving from socket.");
-            exit(EXIT_FAILURE);
+            if (errno == EAGAIN)
+            {
+                syslog(LOG_ERR, "EAGAIN returned from serial port, trying again");
+            }
+            else
+            {
+                perror("Error receiving from serial device.");
+                exit(EXIT_FAILURE);
+            }
         }
-
-        // check if we got a full packet, should be non-null
-        char* null_char = strchr(read_buffer, '\n');
-
-        if (null_char == NULL)
+        else 
         {
-            read_pos += bytes_read;
-        }
-        else
-        {
-            // full packet was received in the buffer since a \n was found
-            full_packet_recieved = true;
-        }
+            syslog(LOG_DEBUG, "read buffer is %s\n", read_buffer);
 
+            // check if we got a full packet, should be non-null
+            char* null_char = strchr(read_buffer, '\n');
+
+            if (null_char == NULL)
+            {
+                read_pos += bytes_read;
+            }
+            else
+            {
+                // full packet was received in the buffer since a \n was found
+                full_packet_recieved = true;
+            }
+        }
     } while (!full_packet_recieved);
 
     syslog(LOG_DEBUG, "Read whole word %s\n",read_buffer);
 
-    // int bytes_read = read(serial_fid, read_buffer, sizeof(read_buffer));
-
     // syslog(LOG_DEBUG, "Number of bytes read was %d",bytes_read);
     syslog(LOG_DEBUG, "Bytes read was %s\n", read_buffer);
 
-    // if (bytes_read < 0)
-    // {
-    //     perror("reading from serial port");
-    //     exit(EXIT_FAILURE);
-    // }
 
-    if (strcmp(read_buffer, "acknowledge") != 0)
+    if (strcmp(read_buffer, is_alive_command) != 0)
     {
         syslog(LOG_ERR, "ARDUINO WAS NOT DETECTED");
         exit(EXIT_FAILURE);
@@ -114,7 +131,7 @@ int main(int argc, char const *argv[])
 
     syslog(LOG_DEBUG, "Log opened for UART server");
 
-    serial_fid = open(ARDUINO_SERIAL_DEVICE, O_RDWR);
+    serial_fid = open(ARDUINO_SERIAL_DEVICE, O_RDWR | O_NOCTTY | O_SYNC);
 
     syslog(LOG_DEBUG, "serial device fid is %d", serial_fid);
 
