@@ -6,4 +6,3 @@ ExecStart=/usr/bin/uartserver
 
 [Install]
 WantedBy=multi-user.target
-EOF
